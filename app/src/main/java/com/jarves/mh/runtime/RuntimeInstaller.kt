@@ -1646,6 +1646,30 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
         )
         Os.chmod(hook.absolutePath, 0b111101101)
 
+        // PreToolUse hooks run before the permission mode is applied, so this still
+        // blocks destructive Bash commands in bypassPermissions mode. "@@" stands for "$"
+        // because "$" is a template character in Kotlin raw strings.
+        val safetyHook = File(rootfs, "opt/pocket/safety-hook.sh")
+        safetyHook.writeText(
+            """#!/bin/sh
+input=`cat`
+deny() {
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Blocked by Mobile Harness safety hook: '"@@1"'. Use a narrower command inside /workspace."}}'
+  exit 0
+}
+if printf '%s' "@@input" | grep -Eq 'rm[[:space:]]+(-[^[:space:]]*[[:space:]]+)*-[a-zA-Z]*[rR]|rm[[:space:]].*--recursive'; then
+  outside=`printf '%s' "@@input" | grep -Eo '[[:space:]]/[^[:space:]"\;&|]*' | grep -Ev '^[[:space:]]/workspace(/|@@)'`
+  [ -n "@@outside" ] && deny "recursive rm outside /workspace"
+  printf '%s' "@@input" | grep -Eq '[[:space:]](~|\@@HOME|\*|\.\.)([[:space:]/"\;&|]|@@)' && deny "recursive rm on home, parent dir or bare wildcard"
+fi
+printf '%s' "@@input" | grep -Eq 'mkfs|dd[[:space:]].*of=/dev/|:\(\)[[:space:]]*\{' && deny "disk wipe or fork bomb"
+printf '%s' "@@input" | grep -Eq '(chmod|chown)[[:space:]]+-[a-zA-Z]*R[a-zA-Z]*[[:space:]]+[^[:space:]]+[[:space:]]+/([[:space:]"]|@@)' && deny "recursive chmod or chown on /"
+printf '%s' "@@input" | grep -Eq 'git[[:space:]]+push([[:space:]].*)?[[:space:]](--force|-f)([[:space:]"]|@@)' && deny "git force push"
+exit 0
+""".replace("@@", "$"),
+        )
+        Os.chmod(safetyHook.absolutePath, 0b111101101)
+
         val settingsContent = JSONObject()
             .put("disableAllHooks", false)
             .put("skipDangerousModePermissionPrompt", true)
@@ -1658,6 +1682,18 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
             .put(
                 "hooks",
                 JSONObject().put(
+                    "PreToolUse",
+                    org.json.JSONArray().put(
+                        JSONObject()
+                            .put("matcher", "Bash")
+                            .put(
+                                "hooks",
+                                org.json.JSONArray().put(
+                                    JSONObject().put("type", "command").put("command", "/opt/pocket/safety-hook.sh"),
+                                ),
+                            ),
+                    ),
+                ).put(
                     "PermissionRequest",
                     org.json.JSONArray().put(
                         JSONObject()
