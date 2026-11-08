@@ -1648,11 +1648,12 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
 
         val settingsContent = JSONObject()
             .put("disableAllHooks", false)
+            .put("skipDangerousModePermissionPrompt", true)
             .put(
                 "permissions",
                 JSONObject()
                     .put("allow", claudeWorkspaceToolRules())
-                    .put("defaultMode", "acceptEdits"),
+                    .put("defaultMode", "bypassPermissions"),
             )
             .put(
                 "hooks",

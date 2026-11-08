@@ -52,6 +52,7 @@ object RuntimeLaunchConfigBuilder {
     fun build(profile: ProviderProfile, authToken: String? = null, localGatewayUrl: String? = null): RuntimeLaunchConfig {
         val environment = linkedMapOf(
             "DISABLE_AUTOUPDATER" to "1",
+            "IS_SANDBOX" to "1",
             // Skip telemetry, error reporting and other background network calls. Each one costs
             // noticeable startup time inside PRoot, and none are needed on device.
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" to "1",
